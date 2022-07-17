@@ -1,13 +1,20 @@
 package com.nqueens;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class NQueensSolver {
     int boardSize; // Size of the chessboard
+    int threadCount; // Number of threads to be used
+    ExecutorService threadExecutor; // Executor used to manage the active threads
     ArrayList<int[]> solutions = new ArrayList<>(); // Used to store the solutions found
 
-    public NQueensSolver(int boardSize) {
+    public NQueensSolver(int boardSize, int threadCount) {
         this.boardSize = boardSize;
+        this.threadCount = threadCount;
+        this.threadExecutor = Executors.newFixedThreadPool(threadCount);
     }
 
     public void solve() {
@@ -16,15 +23,38 @@ public class NQueensSolver {
             // Example: rows[3]=6 means column 3 has a queen placed in row 6
             int[] rows = new int[boardSize];
             rows[0] = i;
-            findSolution(rows, 1);
+            threadExecutor.execute(new NQueensSolverTask(rows, 1));
+        }
+        threadExecutor.shutdown();
+        try {
+            threadExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    // Used by the task executor to assign tasks to individual threads
+    class NQueensSolverTask implements Runnable {
+        int col;
+        int[] rows;
+
+        public NQueensSolverTask(int[] rows, int col) {
+            this.col = col;
+            this.rows = rows;
+        }
+
+        public void run() {
+            findSolution(this.rows, this.col);
         }
     }
 
     private void findSolution(int[] rows, int col) {
         if (col == boardSize) {
             // Found complete solution
-            solutions.add(rows.clone());
-
+            synchronized (this) {
+                this.solutions.add(rows.clone());
+            }
         } else {
             // Continue looking for a solution recursively
             for (int row = 0; row < boardSize; row++) {
